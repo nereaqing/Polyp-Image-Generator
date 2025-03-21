@@ -1,1 +1,1 @@
-hey
+# Synthetic Image Generation for Enhancing Polyp Detection
