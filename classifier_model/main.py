@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import argparse
+import pickle
 
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
@@ -28,14 +29,14 @@ print(device)
 
 def preprocess_files(one_vs_rest=False):
     if one_vs_rest:
-        train_file_path = '../data/train_set_AD_rest.pkl'
-        val_file_path = '../data/val_set_AD_rest.pkl'
-        test_file_path = '../data/test_set_AD_rest.pkl'
+        train_file_path = './data/train_set_AD_rest.pkl'
+        val_file_path = './data/val_set_AD_rest.pkl'
+        test_file_path = './data/test_set_AD_rest.pkl'
     
     else:
-        train_file_path = '../data/train_set.pkl'
-        val_file_path = '../data/val_set.pkl'
-        test_file_path = '.../data/test_set.pkl'
+        train_file_path = './data/train_set_complete_imgs.pkl'
+        val_file_path = './data/val_set_complete_imgs.pkl'
+        test_file_path = './data/test_set_complete_imgs.pkl'
 
 
     # TRAINING SET
@@ -46,14 +47,14 @@ def preprocess_files(one_vs_rest=False):
     #     print(f"Loaded file {train_file_path}")
 
     # else:
-    train_set = PolypDataset(image_dir=".data/m_train2/m_train/images",
-                            csv_file="../data/m_train2/m_train/train.csv",
-                            mask_dir="../data/m_train2/m_train/masks",
+    train_set = PolypDataset(image_dir="./data/m_train2/m_train/images",
+                            csv_file="./data/m_train2/m_train/train.csv",
+                            # mask_dir="./data/m_train2/m_train/masks",
                             transformations=True,
                             one_vs_rest=one_vs_rest
     )
-    # with open(train_file_path, "wb") as f:
-    #     pickle.dump(train_set, f)
+    with open(train_file_path, "wb") as f:
+        pickle.dump(train_set, f)
     
     print(f"File saved at {train_file_path}")
 
@@ -67,14 +68,14 @@ def preprocess_files(one_vs_rest=False):
     #     print(f"Loaded file {val_file_path}")
         
     # else:
-    val_set = PolypDataset(image_dir="../data/m_valid/m_valid/images",
-                        csv_file="../data/m_valid/m_valid/valid.csv",
-                        mask_dir="../data/m_valid/m_valid/masks",
+    val_set = PolypDataset(image_dir="./data/m_valid/m_valid/images",
+                        csv_file="./data/m_valid/m_valid/valid.csv",
+                        # mask_dir="./data/m_valid/m_valid/masks",
                         transformations=True,
                         one_vs_rest=one_vs_rest
         )
-        # with open(val_file_path, "wb") as f:
-        #     pickle.dump(val_set, f)
+    with open(val_file_path, "wb") as f:
+        pickle.dump(val_set, f)
             
     print(f"File saved at {val_file_path}")
         
@@ -88,13 +89,13 @@ def preprocess_files(one_vs_rest=False):
     #     print(f"Loaded file {test_file_path}")
         
     # else:
-    test_set = PolypDataset(image_dir="../data/m_test/m_test/images",
-                        csv_file="../data/m_test/m_test/gt_test.csv",
+    test_set = PolypDataset(image_dir="./data/m_test/m_test/images",
+                        csv_file="./data/m_test/m_test/gt_test.csv",
                         transformations=True,
                         one_vs_rest=one_vs_rest
     )
-        # with open(test_file_path, "wb") as f:
-        #     pickle.dump(test_set, f)
+    with open(test_file_path, "wb") as f:
+        pickle.dump(test_set, f)
             
     print(f"File saved at {test_file_path}")
     
@@ -257,7 +258,7 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
         
         all_metrics = classification_report(true_labels, predicted_labels, labels=sorted(list(set(true_labels))), output_dict=True)
         df_metrics = pd.DataFrame(all_metrics).transpose()
-        path_report = f'../results/metrics_report_{timestamp}.csv'
+        path_report = f'./results/metrics_report_{timestamp}.csv'
         df_metrics.to_csv(path_report)
         mlflow.log_artifact(path_report, "results")
         
@@ -269,7 +270,7 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
         plt.xlabel("Predicted Label")
         plt.ylabel("True Label")
         plt.title("Confusion Matrix")
-        path_cm = f'../results/confusion_matrix_{timestamp}.png'
+        path_cm = f'./results/confusion_matrix_{timestamp}.png'
         plt.savefig(path_cm)
         plt.show()
         mlflow.log_artifact(path_cm, "results")
@@ -303,19 +304,24 @@ def main():
     
     args = parser.parse_args()
     
+    techniques = []
+    
     # ================ Construct dataset ==================
+    print("Constructing datasets...")
     if args.one_vs_all:
         train_set, val_set, test_set = preprocess_files(one_vs_rest=True)
+        techniques.append("ad vs rest")
     else:
         train_set, val_set, test_set = preprocess_files()
-    print(train_set.transformations_list)
-    print(Fore.GREEN + f"Datasets processed")
+    print("Transformations to apply:", train_set.transformations_list)
+    print("Datasets created")
 
     # ========= Construct dataloader ========================
+    print("Constructing dataloaders...")
     batch_size = args.batch_size
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=0, drop_last=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=0)
-    test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=0)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=4)
+    test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=4)
     
     if args.weighted_sampling:
         _, class_weights_dict = get_class_weights(train_set)
@@ -326,9 +332,12 @@ def main():
         val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=4)
         test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=4)
         
+        techniques.append('weighted sampling')
+        
     print(Fore.GREEN + f"Dataloaders created")
      
     # ====================== Set hyperparameters ==========================
+    print("Setting hyperparameters...")
     learning_rate = args.learning_rate
     num_epochs = 100
     early_stopping = 10
@@ -339,28 +348,45 @@ def main():
     polyp_model = PolypClassificationModel(num_classes=len(train_set.dic_label2idx), dropout=dropout, hidden_features=hidden_features)
     if args.weighted_loss:
         class_weights_tensor, _ = get_class_weights(train_set)
+        class_weights_tensor = class_weights_tensor.to(device)
         criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
+        techniques.append('weighted loss')
     else:
         criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(polyp_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     
-    params = {
-        "transformations": train_set.transformations_list,
-        "criterion": "CrossEntropy",
-        "optimizer": "Adam",
-        "hidden_features": hidden_features,
-        "batch_size": batch_size,
-        "dropout": dropout,
-        "learning_rate": learning_rate,
-        "weight_decay": weight_decay,
-        "num_epohcs": num_epochs,
-        "early_stopping": early_stopping,
-        "other_techniques": "None"
-    }
+    if len(techniques) == 0:
+        params = {
+            "transformations": train_set.transformations_list,
+            "criterion": "CrossEntropy",
+            "optimizer": "Adam",
+            "hidden_features": hidden_features,
+            "batch_size": batch_size,
+            "dropout": dropout,
+            "learning_rate": learning_rate,
+            "weight_decay": weight_decay,
+            "num_epohcs": num_epochs,
+            "early_stopping": early_stopping,
+            "other_techniques": "None"
+        }
+    else:
+        params = {
+            "transformations": train_set.transformations_list,
+            "criterion": "CrossEntropy",
+            "optimizer": "Adam",
+            "hidden_features": hidden_features,
+            "batch_size": batch_size,
+            "dropout": dropout,
+            "learning_rate": learning_rate,
+            "weight_decay": weight_decay,
+            "num_epohcs": num_epochs,
+            "early_stopping": early_stopping,
+            "other_techniques": techniques
+        }
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     model_name = f"classifier_{timestamp}.pth"
-    model_path = f'../models/baseline_classification/{model_name}'
+    model_path = f'./models/baseline_classification/{model_name}'
     if os.path.exists(os.path.dirname(model_path)):
         print(True)
         print(model_path)
@@ -372,6 +398,7 @@ def main():
     # =============== TRAINING ===============================
     with mlflow.start_run(run_name=model_name) as run:
         mlflow.log_params(params)
+        print("Training...")
         train_loss_hist, val_loss_hist, val_accuracy = train(num_epochs, 
                                             polyp_model, 
                                             train_loader, 
@@ -387,9 +414,10 @@ def main():
         RUN_ID = run.info.run_id
         
         print("Run ID:", RUN_ID)
+        
     
-    
-    path = f"../results/loss_{timestamp}.png"
+    print("Creating plot loss...")
+    path = f"./results/loss_{timestamp}.png"
     plot_loss(train_loss_hist, val_loss_hist, path)
 
     with mlflow.start_run(run_id=RUN_ID):
@@ -399,13 +427,16 @@ def main():
         
 
     # ===================== TESTING ====================================
+    print("Evaluating model...")
     metrics, conf_matrix = evaluate_model(polyp_model, model_path, test_loader, train_set, RUN_ID, timestamp)
+    print("Finished model evaluation")
     
-    df = pd.read_csv('parameters_register.csv')
+    print("Registering parameters...")
+    df = pd.read_csv('./classifier_model/parameters_register.csv')
     new_row = [model_name] + list(params.values()) + [str(metrics["f1_score"])]
     df.loc[len(df)] = new_row
-    df.to_csv('parameters_register.csv', index=False)
-    print(Fore.GREEN + f"Parameters registered at parameters_register.csv")
+    df.to_csv('./classifier_model/parameters_register.csv', index=False)
+    print(Fore.GREEN + f"Parameters registered at ./classifier_model/parameters_register.csv")
 
 
 if __name__ == "__main__":

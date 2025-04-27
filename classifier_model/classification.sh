@@ -6,16 +6,15 @@
 #SBATCH -p tfg
 #SBATCH --mem 2048
 #SBATCH --gres gpu:1
-#SBATCH -o results/outputs/output%j.out
-#SBATCH -e results/errors/error%j.err
+#SBATCH -o classifier_model/outputs/output%j.out
+#SBATCH -e classifier_model/outputs/error%j.err
 
-# Activate your environment
 source .venv/bin/activate
 
-# Run your Python script with any desired arguments
-python -u main.py \
+python -u classifier_model/main.py \
     --batch_size 16 \
     --learning_rate 1e-3 \
     --weight_decay 1e-3 \
-    --hidden_features 512 \
-    --dropout 0.5
+    --hidden_features 256 \
+    --dropout 0.5\
+    --weighted_loss

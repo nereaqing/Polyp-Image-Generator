@@ -21,4 +21,6 @@ classifier_20250420_014452.pth,"['resize', 'normalize']",CrossEntropy,Adam,256,1
 classifier_20250420_015623.pth,"['resize', 'normalize']",CrossEntropy,Adam,256,16,0.5,0.0001,0.001,100,10,weighted sampling,0.5177
 classifier_20250420_023347.pth,"['resize', 'normalize']",CrossEntropy,Adam,256,16,0.3,0.001,0.001,100,10,,0.5146
 classifier_20250420_023657.pth,"['resize', 'normalize']",CrossEntropy,Adam,512,16,0.5,0.001,0.001,100,10,,0.522
-classifier_20250420_023548.pth,"['resize', 'normalize']",CrossEntropy,Adam,256,4,0.5,1e-05,0.001,100,10,None,0.5199
+classifier_20250420_023548.pth,"['resize', 'normalize']",CrossEntropy,Adam,256,4,0.5,1e-05,0.001,100,10,,0.5199
+classifier_20250421_005141.pth,"['resize', 'normalize']",CrossEntropy,Adam,256,16,0.5,0.001,0.001,100,10,['weighted loss'],0.5305
+classifier_20250421_011425.pth,"['resize', 'normalize']",CrossEntropy,Adam,256,16,0.5,0.001,0.001,100,10,['weighted loss'],0.6069
