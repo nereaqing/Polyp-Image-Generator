@@ -11,4 +11,4 @@
 
 source .venv/bin/activate
 
-python -u generator_model/training_stable_diffusion.py 
+python -u generator_model/diffusion_model_from_scratch.py 

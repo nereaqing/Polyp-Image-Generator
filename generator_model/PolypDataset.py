@@ -12,16 +12,25 @@ from config import TrainingConfig
 config = TrainingConfig()
 
 class PolypDataset(Dataset):
-    def __init__(self, image_dir, csv_file, mask_dir=None, transformations=False, one_vs_rest=False, dreambooth=False):
+    def __init__(self, image_dir, csv_file, mask_dir=None, transformations=False, one_vs_rest=False, dreambooth=False, keep_one_class=None):
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         
         self.dreambooth = dreambooth
 
         self.df = pd.read_csv(csv_file)
-        self.image_ids = self.df['image_id'].tolist()
-
-        self.dic_label2idx = {'AD': 0, 'ASS': 1, 'HP': 1 if one_vs_rest else 2}
+        if keep_one_class == "AD":
+            self.image_ids = self.df[self.df['cls'] == 'AD']['image_id'].tolist()
+            self.dic_label2idx = {"AD": 0}
+        elif keep_one_class == "ASS":
+            self.image_ids = self.df[self.df['cls'] == 'ASS']['image_id'].tolist()
+            self.dic_label2idx = {"ASS": 0}
+        elif keep_one_class == "HP":
+            self.image_ids = self.df[self.df['cls'] == 'HP']['image_id'].tolist()
+            self.dic_label2idx = {"HP": 0}
+        else:
+            self.image_ids = self.df['image_id'].tolist()
+            self.dic_label2idx = {'AD': 0, 'ASS': 1, 'HP': 1 if one_vs_rest else 2}
         self.idx2label = {idx: label for label, idx in self.dic_label2idx.items()}
         self.labels = self.df['cls'].map(self.dic_label2idx).tolist()
 
@@ -34,7 +43,7 @@ class PolypDataset(Dataset):
             }
 
         if transformations:
-            # self.transformations_list = ['resize', 'normalize']
+            self.transformations_list = ['resize', 'randomHorizontalFlip', 'normalize']
             # self.transform = transforms.Compose([
             #     transforms.Resize((224, 224), antialias=True),
             #     transforms.ToTensor(),
