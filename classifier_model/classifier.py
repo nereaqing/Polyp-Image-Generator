@@ -27,7 +27,7 @@ assert torch.cuda.is_available(), "GPU is not enabled"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 
-def preprocess_files(one_vs_rest=False):
+def preprocess_files(image_size, one_vs_rest=False):
     if one_vs_rest:
         train_file_path = './data/train_set_AD_rest.pkl'
         val_file_path = './data/val_set_AD_rest.pkl'
@@ -50,6 +50,7 @@ def preprocess_files(one_vs_rest=False):
     train_set = PolypDataset(image_dir="./data/m_train2/m_train/images",
                             csv_file="./data/m_train2/m_train/train.csv",
                             # mask_dir="./data/m_train2/m_train/masks",
+                            img_size=image_size,
                             transformations=True,
                             one_vs_rest=one_vs_rest
     )
@@ -71,6 +72,7 @@ def preprocess_files(one_vs_rest=False):
     val_set = PolypDataset(image_dir="./data/m_valid/m_valid/images",
                         csv_file="./data/m_valid/m_valid/valid.csv",
                         # mask_dir="./data/m_valid/m_valid/masks",
+                        img_size=image_size,
                         transformations=True,
                         one_vs_rest=one_vs_rest
         )
@@ -91,6 +93,7 @@ def preprocess_files(one_vs_rest=False):
     # else:
     test_set = PolypDataset(image_dir="./data/m_test/m_test/images",
                         csv_file="./data/m_test/m_test/gt_test.csv",
+                        img_size=image_size,
                         transformations=True,
                         one_vs_rest=one_vs_rest
     )
@@ -258,7 +261,7 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
         
         all_metrics = classification_report(true_labels, predicted_labels, labels=sorted(list(set(true_labels))), output_dict=True)
         df_metrics = pd.DataFrame(all_metrics).transpose()
-        path_report = f'./results/metrics_report_{timestamp}.csv'
+        path_report = f'./classifier_model/results/metrics_report_{timestamp}.csv'
         df_metrics.to_csv(path_report)
         mlflow.log_artifact(path_report, "results")
         
@@ -270,7 +273,7 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
         plt.xlabel("Predicted Label")
         plt.ylabel("True Label")
         plt.title("Confusion Matrix")
-        path_cm = f'./results/confusion_matrix_{timestamp}.png'
+        path_cm = f'./classifier_model/results/confusion_matrix_{timestamp}.png'
         plt.savefig(path_cm)
         plt.show()
         mlflow.log_artifact(path_cm, "results")
@@ -297,6 +300,7 @@ def main():
     parser.add_argument("--learning_rate", type=float)
     parser.add_argument("--weight_decay", type=float)
     parser.add_argument("--hidden_features", type=int)
+    parser.add_argument("--img_size", type=int)
     parser.add_argument("--dropout", type=float)
     parser.add_argument("--one_vs_all", action="store_true")
     parser.add_argument("--weighted_loss", action="store_true")
@@ -309,10 +313,10 @@ def main():
     # ================ Construct dataset ==================
     print("Constructing datasets...")
     if args.one_vs_all:
-        train_set, val_set, test_set = preprocess_files(one_vs_rest=True)
+        train_set, val_set, test_set = preprocess_files(args.img_size, one_vs_rest=True)
         techniques.append("ad vs rest")
     else:
-        train_set, val_set, test_set = preprocess_files()
+        train_set, val_set, test_set = preprocess_files(args.img_size)
     print("Transformations to apply:", train_set.transformations_list)
     print("Datasets created")
 
@@ -358,6 +362,7 @@ def main():
     if len(techniques) == 0:
         params = {
             "transformations": train_set.transformations_list,
+            "image_size": args.img_size,
             "criterion": "CrossEntropy",
             "optimizer": "Adam",
             "hidden_features": hidden_features,
@@ -372,6 +377,7 @@ def main():
     else:
         params = {
             "transformations": train_set.transformations_list,
+            "image_size": args.img_size,
             "criterion": "CrossEntropy",
             "optimizer": "Adam",
             "hidden_features": hidden_features,
@@ -383,6 +389,8 @@ def main():
             "early_stopping": early_stopping,
             "other_techniques": techniques
         }
+
+    print(params)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     model_name = f"classifier_{timestamp}.pth"
@@ -417,7 +425,7 @@ def main():
         
     
     print("Creating plot loss...")
-    path = f"./results/loss_{timestamp}.png"
+    path = f"./classifier_model/results/loss_{timestamp}.png"
     plot_loss(train_loss_hist, val_loss_hist, path)
 
     with mlflow.start_run(run_id=RUN_ID):

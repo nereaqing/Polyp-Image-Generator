@@ -1,6 +1,5 @@
-from PIL import Image
 import os
-from datetime import datetime
+import random
 
 import torch
 from torch.utils.data import DataLoader
@@ -8,41 +7,59 @@ import torch.nn.functional as F
 
 from diffusers import UNet2DModel, DDPMScheduler, DDPMPipeline
 from diffusers.optimization import get_cosine_schedule_with_warmup
-from diffusers.utils import make_image_grid
 
 from config import TrainingConfig
 from PolypDataset import PolypDataset
 
 import mlflow
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
-EXPERIMENT_NAME = "generator_model"
+EXPERIMENT_NAME = "diffusion_from_scratch"
 mlflow.set_experiment(EXPERIMENT_NAME)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("Device:", device)
 
-def evaluate(config, epoch, pipeline):
-    # Sample some images from random noise (this is the backward diffusion process).
-    # The default pipeline output type is `List[PIL.Image]`
-    images = pipeline(
-        batch_size=config.eval_batch_size,
-        generator=torch.Generator(device='cpu').manual_seed(config.seed),  # Use a separate torch generator to avoid rewinding the random state of the main training loop
-    ).images
-
-    # Create a subfolder for the current epoch
-    epoch_dir = os.path.join(config.output_dir, "samples", f"{epoch:04d}")
-    os.makedirs(epoch_dir, exist_ok=True)
-
-    # Save each image separately
-    for idx, image in enumerate(images, 1):
-        image.save(f"{epoch_dir}/{idx}.png")
+def log_sample_images(samples_dir, cls, epoch, num_samples=5):
+    image_files = [f for f in os.listdir(samples_dir) if f.endswith(".png")]
+    selected_files = random.sample(image_files, min(num_samples, len(image_files)))
     
-    print(f"  Images saved at {epoch_dir}")
+    for img_file in selected_files:
+        full_path = os.path.join(samples_dir, img_file)
+        mlflow.log_artifact(full_path, artifact_path=f"sample_images/images_{cls}/{epoch:04d}") 
+
+
+def evaluate(config, epoch, pipeline, cls, num_imgs_to_generate):
+    # Create directory to save the generated images
+    cls_dir = os.path.join(config.output_dir, "sample_images", f"images_{cls}", f"{epoch:04d}")
+    os.makedirs(cls_dir, exist_ok=True)
+
+    total_saved = 0
+    batch_id = 0
+
+    while total_saved < num_imgs_to_generate:
+        # Images to generate in this batch
+        current_batch_size = min(config.eval_batch_size, num_imgs_to_generate - total_saved)
+
+        images = pipeline(
+            batch_size=current_batch_size,
+            generator=torch.Generator(device='cpu').manual_seed(config.seed + batch_id),
+        ).images
+
+        for idx, image in enumerate(images, 1):
+            image.save(os.path.join(cls_dir, f"{total_saved + idx}.png"))
+
+        total_saved += len(images)
+        batch_id += 1
+        
+        print(f"   Saved {total_saved} images")
+
+    print(f"  {num_imgs_to_generate} images saved at {cls_dir}")
+    
+    log_sample_images(cls_dir, cls, epoch, num_samples=10)
 
 
 
-
-def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
+def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler, cls, num_imgs_to_generate):
     model.to(device)
 
     if config.output_dir is not None:
@@ -84,85 +101,96 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
         pipeline = DDPMPipeline(unet=model, scheduler=noise_scheduler)
 
-        if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
-            evaluate(config, epoch, pipeline)
+        # if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+        if epoch in [49,99]:
+            evaluate(config, epoch, pipeline, cls, num_imgs_to_generate)
 
-        if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
-            pipeline.save_pretrained(config.output_dir)
-            print(f"  Model saved at {config.output_dir}")
-
+        # if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+        if epoch in [49, 99]:
+            path_model = os.path.join(config.output_dir, "models", f"model_{cls}")
+            pipeline.save_pretrained(path_model)
+            print(f"  Model saved at {path_model}")
+            
+            mlflow.log_artifact(path_model, f"models/model_{cls}")
+            
+def get_num_images_to_generate(cls):
+    if cls == 'AD':
+        return 100
+    elif cls == 'ASS' or cls == 'HP':
+        return 300
 
 
 def main():
     # Load and set config
     config = TrainingConfig()
-
-    train_data = PolypDataset(image_dir="./data/m_train2/m_train/images",
-                            csv_file="./data/m_train2/m_train/train.csv",
-                            transformations=True)
-    train_loader = DataLoader(train_data, batch_size=config.train_batch_size, shuffle=True)
-
-
-    # Fine-tune model
-    model = UNet2DModel(
-        sample_size=config.image_size,  # the target image resolution
-        in_channels=3,  # the number of input channels, 3 for RGB images
-        out_channels=3,  # the number of output channels
-        layers_per_block=2,  # how many ResNet layers to use per UNet block
-        block_out_channels=(128, 128, 256, 256, 512, 512),  # the number of output channels for each UNet block
-        down_block_types=(
-            "DownBlock2D",  # a regular ResNet downsampling block
-            "DownBlock2D",
-            "DownBlock2D",
-            "DownBlock2D",
-            "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
-            "DownBlock2D",
-        ),
-        up_block_types=(
-            "UpBlock2D",  # a regular ResNet upsampling block
-            "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
-            "UpBlock2D",
-            "UpBlock2D",
-            "UpBlock2D",
-            "UpBlock2D",
-        ),
-    )
-
-    # Create scheduler
-    noise_scheduler = DDPMScheduler(num_train_timesteps=config.num_train_timesteps)
-
-
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
-    lr_scheduler = get_cosine_schedule_with_warmup(
-        optimizer=optimizer,
-        num_warmup_steps=config.lr_warmup_steps,
-        num_training_steps=(len(train_loader) * config.num_epochs),
-    )
     
-    params = {
-            "transformations": train_data.transformations_list,
-            "criterion": "MSELoss",
-            "optimizer": "AdamW",
-            "batch_size": config.train_batch_size,
-            "learning_rate": config.learning_rate,
-            "num_epohcs": config.num_epochs,
-            "image_size": config.image_size,
-            "train_timesteps": config.num_train_timesteps
-        }
+    classes = ['AD', 'HP', 'ASS']
+        
+    with mlflow.start_run(run_name=os.path.basename(config.output_dir)):
     
+        for cls in classes:
+            num_imgs_to_generate = get_num_images_to_generate(cls)
+            train_data = PolypDataset(image_dirs=["./data/m_train2/m_train/images", "./data/m_valid/m_valid/images"],
+                                    csv_files=["./data/m_train2/m_train/train.csv", "./data/m_valid/m_valid/valid.csv"],
+                                    transformations=True,
+                                    keep_one_class=cls)
+            
+            train_loader = DataLoader(train_data, batch_size=config.train_batch_size, shuffle=True)
+            
+            params = {
+                    "transformations": train_data.transformations_list,
+                    "criterion": "MSELoss",
+                    "optimizer": "AdamW",
+                    "batch_size": config.train_batch_size,
+                    "learning_rate": config.learning_rate,
+                    "num_epohcs": config.num_epochs,
+                    "image_size": config.image_size,
+                    "train_timesteps": config.num_train_timesteps
+                }
+        
+            mlflow.log_params(params)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_name = f"classifier_{timestamp}.pth"
-    model_path = f'./models/baseline_classification/{model_name}'
-    if os.path.exists(os.path.dirname(model_path)):
-        print(True)
-        print(model_path)
-    else:
-        print(False)
 
-    print("Starting training...")
-    train_loop(config, model, noise_scheduler, optimizer, train_loader, lr_scheduler)
-    print("Training finished successfully")
+            # Fine-tune model
+            model = UNet2DModel(
+                sample_size=config.image_size, 
+                in_channels=3, 
+                out_channels=3, 
+                layers_per_block=2, 
+                block_out_channels=(128, 128, 256, 256, 512, 512),
+                down_block_types=(
+                    "DownBlock2D", 
+                    "DownBlock2D",
+                    "DownBlock2D",
+                    "DownBlock2D",
+                    "AttnDownBlock2D", 
+                    "DownBlock2D",
+                ),
+                up_block_types=(
+                    "UpBlock2D",
+                    "AttnUpBlock2D",
+                    "UpBlock2D",
+                    "UpBlock2D",
+                    "UpBlock2D",
+                    "UpBlock2D",
+                ),
+            )
+
+            # Create scheduler
+            noise_scheduler = DDPMScheduler(num_train_timesteps=config.num_train_timesteps)
+
+
+            optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
+            lr_scheduler = get_cosine_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=config.lr_warmup_steps,
+                num_training_steps=(len(train_loader) * config.num_epochs),
+            )
+            
+
+            print("Starting training...")
+            train_loop(config, model, noise_scheduler, optimizer, train_loader, lr_scheduler, cls, num_imgs_to_generate)
+            print(f"Training for class {cls} finished successfully\n")
     
 if __name__ == "__main__":
     main()

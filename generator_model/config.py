@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 @dataclass
 class TrainingConfig:
@@ -13,5 +14,7 @@ class TrainingConfig:
     save_image_epochs = 10
     save_model_epochs = 10
     mixed_precision = "fp16"
-    output_dir = "models/generator_model/ddpm-polyps-128-2" # model_name
     seed = 0
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"models/generator_model/diffusion_with_validation_{timestamp}" # model_name

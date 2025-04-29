@@ -26,3 +26,24 @@ def plot_loss(train_losses, val_losses, filename="loss_history.png"):
     plt.show()
 
     print(f"Plot saved as {filename}")
+    
+
+def visualize_image(image, mask=None, masked_image=None):
+    if mask is not None and masked_image is not None:
+        fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+        ax[0].imshow(image)
+        ax[0].set_title("Original Image")
+        ax[0].axis('off')
+        ax[1].imshow(mask, cmap="gray")
+        ax[1].set_title("Mask (Polyp Region)")
+        ax[1].axis('off')
+        ax[2].imshow(masked_image)
+        ax[2].set_title("Masked Image (Polyp Extracted)")
+        ax[2].axis('off')
+    else:
+        fig, ax = plt.subplots(1, 1, figsize=(15, 5))
+        ax.imshow(image)
+        ax.set_title("Original Image")
+        ax.axis('off')
+    plt.show()
+
