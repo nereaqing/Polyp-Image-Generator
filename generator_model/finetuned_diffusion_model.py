@@ -8,7 +8,7 @@ from diffusers import UNet2DModel, DDPMScheduler, DDPMPipeline, UNet2DConditionM
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
 from config import TrainingConfig
-from PolypDataset import PolypDataset
+from generator_model.PolypDiffusionDataset import PolypDataset
 
 import mlflow
 mlflow.set_tracking_uri("http://127.0.0.1:5000")

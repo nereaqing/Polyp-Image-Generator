@@ -11,15 +11,15 @@ from config import TrainingConfig
 
 config = TrainingConfig()
 
-class PolypDataset(Dataset):
-    def __init__(self, image_dirs, csv_files, mask_dirs=None, transformations=False, one_vs_rest=False, dreambooth=False, keep_one_class=None):
+class PolypDiffusionDataset(Dataset):
+    def __init__(self, image_dirs, csv_files, mask_dirs=None, transformations=False, dreambooth=False, keep_one_class=None):
         self.image_paths = []
         self.labels = []
         self.dreambooth = dreambooth
         self.mask_paths = []
         self.has_masks = mask_dirs is not None
 
-        self.dic_label2idx = {'AD': 0, 'ASS': 1, 'HP': 1 if one_vs_rest else 2}
+        self.dic_label2idx = {'AD': 0, 'ASS': 1, 'HP': 2}
 
         for i, (img_dir, csv_file) in enumerate(zip(image_dirs, csv_files)):
             self.df = pd.read_csv(csv_file)

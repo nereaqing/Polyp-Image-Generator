@@ -9,7 +9,7 @@ from diffusers import UNet2DModel, DDPMScheduler, DDPMPipeline
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
 from config import TrainingConfig
-from PolypDataset import PolypDataset
+from generator_model.PolypDiffusionDataset import PolypDataset
 
 import mlflow
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
@@ -25,12 +25,12 @@ def log_sample_images(samples_dir, cls, epoch, num_samples=5):
     
     for img_file in selected_files:
         full_path = os.path.join(samples_dir, img_file)
-        mlflow.log_artifact(full_path, artifact_path=f"sample_images/images_{cls}/{epoch:04d}") 
+        mlflow.log_artifact(full_path, artifact_path=f"samples/images_{cls}/{epoch:04d}") 
 
 
 def evaluate(config, epoch, pipeline, cls, num_imgs_to_generate):
     # Create directory to save the generated images
-    cls_dir = os.path.join(config.output_dir, "sample_images", f"images_{cls}", f"{epoch:04d}")
+    cls_dir = os.path.join(config.output_dir, "samples", f"{cls}", f"{epoch:04d}")
     os.makedirs(cls_dir, exist_ok=True)
 
     total_saved = 0
@@ -111,7 +111,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             pipeline.save_pretrained(path_model)
             print(f"  Model saved at {path_model}")
             
-            mlflow.log_artifact(path_model, f"models/model_{cls}")
+            mlflow.log_artifact(path_model, f"diffusion_model/model_{cls}")
             
 def get_num_images_to_generate(cls):
     if cls == 'AD':
