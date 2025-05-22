@@ -12,11 +12,14 @@ from config import TrainingConfig
 config = TrainingConfig()
 
 class AugmentedPolypClassificationDataset(Dataset):
-    def __init__(self, dirs, image_size, transformations=False):
+    def __init__(self, dirs, image_size, transformations=False, ad_vs_rest=False):
         self.image_paths = []
         self.labels = []
 
-        self.dic_label2idx = {'AD': 0, 'ASS': 1, 'HP': 2}
+        if ad_vs_rest:
+            self.dic_label2idx = {'AD': 0, 'REST': 1}
+        else:
+            self.dic_label2idx = {'AD': 0, 'ASS': 1, 'HP': 2}
         
         for image_dir, csv_file in dirs:
             if csv_file is not None:
@@ -24,8 +27,12 @@ class AugmentedPolypClassificationDataset(Dataset):
 
                 for _, row in self.df.iterrows():
                     img_path = os.path.join(image_dir, f"{row['image_id']}.tif")
+                    label = row["cls"]
+                    if ad_vs_rest:
+                        label = 'REST' if label != 'AD' else 'AD'
+                    
                     self.image_paths.append(img_path)
-                    self.labels.append(self.dic_label2idx[row["cls"]])
+                    self.labels.append(self.dic_label2idx[label])
                     
             else:
                 label = self.extract_label_from_dir(image_dir)
@@ -63,4 +70,7 @@ class AugmentedPolypClassificationDataset(Dataset):
         return image, label
 
     def extract_label_from_dir(self, image_dir):
-        return os.path.basename(os.path.dirname(image_dir))
+        label = os.path.basename(os.path.dirname(image_dir))
+        if self.dic_label2idx.get("REST") is not None and label != "AD":
+            return "REST"
+        return label

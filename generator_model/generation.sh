@@ -2,7 +2,7 @@
 #SBATCH -n 2
 #SBATCH -N 1
 #SBATCH -D /fhome/nqing/TFG_project  # Use your actual working dir
-#SBATCH -t 1-00:00
+#SBATCH -t 3-00:00
 #SBATCH -p tfg
 #SBATCH --mem 2048
 #SBATCH --gres gpu:1
@@ -11,4 +11,5 @@
 
 source .venv/bin/activate
 
-python -u generator_model/diffusion_model_from_scratch.py 
+python -u generator_model/diffusion_model_from_scratch.py \
+    --conditional_generation

@@ -16,8 +16,10 @@ python -u generator_model/test_diffusion_model.py \
     --learning_rate 1e-3 \
     --weight_decay 1e-3 \
     --hidden_features 256 \
-    --image_size 128 \
+    --image_size 224 \
     --dropout 0.5 \
+    --weighted_sampling \
+    --ad_vs_rest \
     --experiment_name diffusion_from_scratch \
-    --run_id 18aef7b165de44608aa8eeffaf4d46db \
-    --path_model_to_test models/generator_model/diffusion_scratch_20250429_165321
+    --run_id ea8994f1f593409da7c6a4d874f96a75 \
+    --path_model_to_test models/generator_model/diffusion_20250517_211218

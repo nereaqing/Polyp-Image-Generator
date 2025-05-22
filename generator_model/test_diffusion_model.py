@@ -24,38 +24,46 @@ assert torch.cuda.is_available(), "GPU is not enabled"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 
-def preprocess_files(image_size, path_model_to_test):
+def preprocess_files(image_size, path_model_to_test, ad_vs_rest=False):
     train_set = AugmentedPolypClassificationDataset(dirs=[
                                                         ("./data/m_train2/m_train/images", "./data/m_train2/m_train/train.csv"),
-                                                        (f"./{path_model_to_test}/samples/AD/0099", None),
-                                                        (f"./{path_model_to_test}/samples/ASS/0099", None),
-                                                        (f"./{path_model_to_test}/samples/HP/0099", None)
+                                                        (f"./{path_model_to_test}/samples/AD/0199", None),
+                                                        (f"./{path_model_to_test}/samples/REST/0199", None),
+                                                        # (f"./{path_model_to_test}/samples/HP/0199", None)
                                                     ],
                                                     image_size=image_size,
-                                                    transformations=True
+                                                    transformations=True,
+                                                    ad_vs_rest=ad_vs_rest
         )
+    
+    print("train processed")
 
     val_set = AugmentedPolypClassificationDataset(dirs=[
                                                         ("./data/m_valid/m_valid/images", "./data/m_valid/m_valid/valid.csv")
                                                 ],
                                                 image_size=image_size,
-                                                transformations=True
+                                                transformations=True,
+                                                ad_vs_rest=ad_vs_rest
         )
+    
+    print("val processed")
         
         
     test_set = AugmentedPolypClassificationDataset(dirs=[
                                                         ("./data/m_test/m_test/images", "./data/m_test/m_test/gt_test.csv")
                                                 ],
                                                 image_size=image_size,
-                                                transformations=True
+                                                transformations=True,
+                                                ad_vs_rest=ad_vs_rest
     )
+    print("test processed")
     
     return train_set, val_set, test_set
 
 
 def get_class_weights(dataset):
     classes = np.unique(dataset.labels)  # or [0, 1, 2]
-
+    print(classes)
     class_weights = compute_class_weight(class_weight='balanced', classes=classes, y=dataset.labels)
     class_weight_dict = dict(zip(classes, class_weights))
     print(class_weight_dict)
@@ -228,6 +236,10 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
         print(f"Recall: {recall:.4f}")
         print(f"F1 Score: {f1:.4f}")
         
+        mlflow.log_metric("f1_score_classifier", f1)
+        mlflow.log_metric("precision", precision)
+        mlflow.log_metric("recall", recall)
+        mlflow.log_metric("accuracy", accuracy)
 
 
 def main():
@@ -240,6 +252,7 @@ def main():
     parser.add_argument("--dropout", type=float)
     parser.add_argument("--weighted_loss", action="store_true")
     parser.add_argument("--weighted_sampling", action="store_true")
+    parser.add_argument("--ad_vs_rest", action="store_true")
     parser.add_argument("--experiment_name", type=str, required=True)
     parser.add_argument("--run_id", type=str, required=True)
     parser.add_argument("--path_model_to_test", type=str, required=True)
@@ -254,7 +267,7 @@ def main():
     
     # ================ Construct dataset ==================
     print("Constructing datasets...")
-    augmented_train_set, val_set, test_set = preprocess_files(args.image_size, args.path_model_to_test)
+    augmented_train_set, val_set, test_set = preprocess_files(args.image_size, args.path_model_to_test, args.ad_vs_rest)
     print("Transformations to apply:", augmented_train_set.transformations_list)
     print("Datasets created")
 
@@ -352,13 +365,13 @@ def main():
         
         print("Training...")
         train_loss_hist, val_loss_hist, _ = train(num_epochs, 
-                                                            polyp_model, 
-                                                            augmented_train_loader, 
-                                                            val_loader, 
-                                                            optimizer, 
-                                                            criterion,
-                                                            early_stopping,
-                                                            path_model=model_path)
+                                                polyp_model, 
+                                                augmented_train_loader, 
+                                                val_loader, 
+                                                optimizer, 
+                                                criterion,
+                                                early_stopping,
+                                                path_model=model_path)
         
         mlflow.pytorch.log_model(polyp_model, "classifier/model")
     

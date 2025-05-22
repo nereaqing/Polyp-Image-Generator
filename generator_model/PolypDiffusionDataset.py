@@ -2,8 +2,6 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 import os
-import matplotlib.pyplot as plt
-
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
@@ -19,16 +17,28 @@ class PolypDiffusionDataset(Dataset):
         self.mask_paths = []
         self.has_masks = mask_dirs is not None
 
-        self.dic_label2idx = {'AD': 0, 'ASS': 1, 'HP': 2}
+        self.dic_label2idx = {}
+        label_counter = 0
+
+        # Convert to list for unified handling
+        keep_one_class = [keep_one_class] if isinstance(keep_one_class, str) else keep_one_class
 
         for i, (img_dir, csv_file) in enumerate(zip(image_dirs, csv_files)):
-            self.df = pd.read_csv(csv_file)
+            df = pd.read_csv(csv_file)
 
-            if keep_one_class:
-                self.df = self.df[self.df["cls"] == keep_one_class]
-                self.dic_label2idx = {keep_one_class: 0}
+            if keep_one_class is not None:
+                df = df[df["cls"].isin(keep_one_class)]
 
-            for _, row in self.df.iterrows():
+                if len(keep_one_class) > 1:
+                    primary_cls = keep_one_class[0]
+                    df["cls"] = df["cls"].apply(lambda x: primary_cls if x == primary_cls else "REST")
+
+            for cls_name in df["cls"].unique():
+                if cls_name not in self.dic_label2idx:
+                    self.dic_label2idx[cls_name] = label_counter
+                    label_counter += 1
+
+            for _, row in df.iterrows():
                 img_path = os.path.join(img_dir, f"{row['image_id']}.tif")
                 self.image_paths.append(img_path)
                 self.labels.append(self.dic_label2idx[row["cls"]])
@@ -44,7 +54,7 @@ class PolypDiffusionDataset(Dataset):
             self.class_token_map = {
                 0: "a photo of sks adenomatous polyp",
                 1: "a photo of zbt sessile serrated polyp",
-                2: "a photo of mjt hyperplastic polyp"
+                2: "a photo of mjt hyperplastic polyp",
             }
 
         if transformations:
