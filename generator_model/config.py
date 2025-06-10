@@ -11,10 +11,10 @@ class TrainingConfig:
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
     lr_warmup_steps = 500
-    save_image_epochs = 10
-    save_model_epochs = 10
+    # save_image_epochs = 10
+    # save_model_epochs = 10
     mixed_precision = "fp16"
     seed = 0
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = f"models/generator_model/conditional_diffusion_{timestamp}" # model_name
+    output_dir = f"models/generator_model/diffusion_with_lora_{timestamp}" # model_name

@@ -18,9 +18,11 @@ from PolypDiffusionDataset import PolypDiffusionDataset
 from PolypGeneratorModel import PolypGeneratorModel
 
 import mlflow
+print("connecting to mlflow")
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
 EXPERIMENT_NAME = "diffusion_from_scratch"
 mlflow.set_experiment(EXPERIMENT_NAME)
+print("connected")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("Device:", device)
@@ -36,7 +38,7 @@ def log_sample_images(samples_dir, cls, epoch, num_samples=5):
 
 def evaluate(config, epoch, pipeline, cls, imgs_to_generate):
     # Create directory to save the generated images
-    cls_dir = os.path.join(config.output_dir, "samples", f"{cls}", f"{epoch:04d}")
+    cls_dir = os.path.join(config.output_dir, "samples", cls)
     os.makedirs(cls_dir, exist_ok=True)
 
     total_saved = 0
@@ -77,8 +79,6 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
     for epoch in range(config.num_epochs):
         model.train()
         total_loss = 0.0
-        
-        print('1')
 
         for _, batch in enumerate(train_dataloader):
             clean_images = batch[0].to(device) 
@@ -100,11 +100,8 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
                     noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
                 loss = F.mse_loss(noise_pred, noise)
                 
-            print('2')
-
             scaler.scale(loss).backward()
             
-            print('3')
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             # optimizer.step()
@@ -136,7 +133,7 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             mlflow.log_artifact(path_model, f"diffusion_model/model_{cls}")
             
 def counts_per_class():
-    df = pd.read_csv("./data/m_train2/m_train/train.csv")
+    df = pd.read_csv("../data/m_train2/m_train/train.csv")
     df_proportion = pd.DataFrame(df['cls'].value_counts())
     df_proportion.columns = ['count']
     return df_proportion['count'].to_dict()
@@ -174,6 +171,7 @@ def get_num_images_to_generate(distribution, ad_minimum=1000, one_vs_rest=False)
 
 
 def main():
+    print("starting")
     parser = argparse.ArgumentParser()
     parser.add_argument('--one_vs_rest', action='store_true', help='If provided, it will be performed AD vs REST')
     parser.add_argument('--conditional_generation', action='store_true', help='If provided, text embeddings will be provided to the model to train')
@@ -230,8 +228,8 @@ def main():
     
         for cls in classes:
             keep_classes = class_map[cls]
-            train_data = PolypDiffusionDataset(image_dirs=["./data/m_train2/m_train/images", "./data/m_valid/m_valid/images"],
-                                    csv_files=["./data/m_train2/m_train/train.csv", "./data/m_valid/m_valid/valid.csv"],
+            train_data = PolypDiffusionDataset(image_dirs=["../data/m_train2/m_train/images", "../data/m_valid/m_valid/images"],
+                                    csv_files=["../data/m_train2/m_train/train.csv", "../data/m_valid/m_valid/valid.csv"],
                                     transformations=True,
                                     keep_one_class=keep_classes)
             
@@ -282,7 +280,7 @@ def main():
 
             print("Starting training...")
             train_loop(config, model, noise_scheduler, optimizer, train_loader, lr_scheduler, 
-                       cls, num_imgs_to_generate[cls], text_embeddings=prompt_embeddings)
+                       cls, num_imgs_to_generate[cls])
             print(f"Training for class {cls} finished successfully\n")
     
 if __name__ == "__main__":
