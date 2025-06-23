@@ -250,7 +250,7 @@ def main():
             
 
             # Create model
-            model = PolypGeneratorModel(args.conditional_generation).get_model()
+            model = PolypGeneratorModel(device, pretrained=False, add_lora=False).get_model()
             
             if args.conditional_generation:
                 tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")

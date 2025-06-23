@@ -10,10 +10,9 @@ from config import TrainingConfig
 config = TrainingConfig()
 
 class PolypDiffusionDataset(Dataset):
-    def __init__(self, image_dirs, csv_files, mask_dirs=None, transformations=False, dreambooth=False, keep_one_class=None):
+    def __init__(self, image_dirs, csv_files, mask_dirs=None, transformations=False, keep_one_class=None):
         self.image_paths = []
         self.labels = []
-        self.dreambooth = dreambooth
         self.mask_paths = []
         self.has_masks = mask_dirs is not None
 
@@ -50,13 +49,6 @@ class PolypDiffusionDataset(Dataset):
 
         self.idx2label = {idx: label for label, idx in self.dic_label2idx.items()}
 
-        if self.dreambooth:
-            self.class_token_map = {
-                0: "a photo of sks adenomatous polyp",
-                1: "a photo of zbt sessile serrated polyp",
-                2: "a photo of mjt hyperplastic polyp",
-            }
-
         if transformations:
             self.transformations_list = ['resize', 'randomHorizontalFlip', 'normalize']
             self.transform = transforms.Compose([
@@ -86,8 +78,4 @@ class PolypDiffusionDataset(Dataset):
 
         image = self.transform(image)
 
-        if self.dreambooth:
-            prompt = self.class_token_map[label]
-            return image, prompt
-        else:
-            return image, label
+        return image, label

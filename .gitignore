@@ -5,3 +5,4 @@ wandb/
 results/
 mlruns/
 mlartifacts/
+commands.txt
