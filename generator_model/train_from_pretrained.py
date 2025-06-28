@@ -14,7 +14,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from peft import LoraConfig, PeftModel
 
-from config import TrainingConfig
+from generator_model.config_diffusion import TrainingConfig
 from PolypDataset import PolypDataset
 
 import mlflow

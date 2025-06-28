@@ -11,6 +11,7 @@ from colorama import Fore, Style
 import matplotlib.pyplot as plt
 import math
 from pathlib import Path
+import shutil
 
 from transformers import CLIPTokenizer, CLIPTextModel
 from diffusers import (
@@ -20,12 +21,11 @@ from diffusers import (
 from diffusers.optimization import get_cosine_schedule_with_warmup
 from peft import LoraConfig
 
-from config import TrainingConfig
+from config_diffusion import TrainingConfig
 from PolypDataset import PolypDataset
 from PolypDiffusionDataset import PolypDiffusionDataset
 
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
-mlflow.set_experiment("diffusion_pretrained")
 
 def save_lora_weights(unet, save_path):
     os.makedirs(save_path, exist_ok=True)
@@ -103,7 +103,9 @@ def plot_loss(losses, output_dir, cls):
 
 
 
-def train_loop(device, config, unet, vae, text_encoder, tokenizer, noise_scheduler, optimizer, dataloader, lr_scheduler, prompt, cls, imgs_to_generate, train_text_encoder=False, latent_to_text_proj=None):
+def train_loop(device, config, unet, vae, text_encoder, tokenizer, noise_scheduler, optimizer, 
+               dataloader, lr_scheduler, prompt, cls, imgs_to_generate, 
+               train_text_encoder=False, latent_to_text_proj=None, out_dir=None):
     unet.train()
     if train_text_encoder:
         text_encoder.train()
@@ -176,6 +178,9 @@ def train_loop(device, config, unet, vae, text_encoder, tokenizer, noise_schedul
                 safety_checker=None, 
                 feature_extractor=None
             ).to(device)
+            
+            load_lora_weights(device, pipe.unet, save_path)
+            evaluate(config, pipe, cls, prompt, imgs_to_generate, out_dir)
 
             pipe.unet.cpu()
             pipe.vae.cpu()
@@ -186,6 +191,12 @@ def train_loop(device, config, unet, vae, text_encoder, tokenizer, noise_schedul
 
             mlflow.log_artifact(os.path.join(config.output_dir, f"model_{cls}"), f"models/{cls}")
             mlflow.log_artifact(save_path, f"models/lora_{cls}")
+            
+            print(Fore.GREEN + "Models sucessfully logged onto MLFlow" + Style.RESET_ALL)
+            
+            shutil.rmtree(save_path) # remove lora weights
+            shutil.rmtree(os.path.join(config.output_dir, f"model_{cls}")) # remove diffusion model pipeline
+            print(Fore.RED + "Models removed from local computer" + Style.RESET_ALL)
     
     plot_path = plot_loss(loss_hist, config.output_dir, cls)
     mlflow.log_artifact(plot_path)
@@ -194,8 +205,8 @@ def train_loop(device, config, unet, vae, text_encoder, tokenizer, noise_schedul
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--folder", type=str, required=True)
-    parser.add_argument("--classes_to_train", nargs='+', type=str, required=True) # AD HP ASS
-    parser.add_argument("--num_imgs_to_generate", nargs='+', type=int, required=True) # 465 619 628
+    parser.add_argument("--classes_to_train", nargs='+', type=str, required=True) # AD HP ASS REST
+    parser.add_argument("--num_imgs_to_generate", nargs='+', type=int, required=True) # 465 619 628 413
     parser.add_argument("--run_id", type=str, required=True)
     parser.add_argument('--unconditional', action='store_true')
     parser.add_argument('--class_condition', action='store_true')
@@ -210,8 +221,6 @@ def main():
         print(Fore.MAGENTA + os.path.basename(args.folder) + Style.RESET_ALL)
     else:
         print(Fore.RED + "No folder exists" + Style.RESET_ALL)
-        import sys
-        sys.exit()
     
     device = torch.device(config.device if torch.cuda.is_available() else "cpu")
     print("Device:", device)
@@ -227,12 +236,14 @@ def main():
     
     for class_to_train, n_imgs in zip(args.classes_to_train, args.num_imgs_to_generate):
         if class_to_train != 'REST':
-            class_map[class_to_train] = list(class_to_train)
+            class_map[class_to_train] = [class_to_train]
         else:
             class_map["REST"] =  ['HP', 'ASS']
         
         num_imgs_to_generate[class_to_train] = n_imgs
             
+
+    mlflow.set_experiment(experiment_name=config.experiment_name)
 
     with mlflow.start_run(run_id=args.run_id):
         for cls, n_imgs_to_generate in zip(args.classes_to_train, args.num_imgs_to_generate):
@@ -285,6 +296,9 @@ def main():
                                         csv_files=["../data/m_train2/m_train/train.csv", "../data/m_valid/m_valid/valid.csv"],
                                         transformations=True,
                                         keep_one_class=class_map[cls])
+                print(cls)
+                print(class_map[cls])
+                print(len(dataset))
                 dataloader = DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
     
                 vae = AutoencoderKL.from_pretrained("CompVis/stable-diffusion-v1-4", subfolder="vae").to(device)
@@ -435,18 +449,21 @@ def main():
                             prompt = [f"{cls}"]
                     else:
                         if args.dreambooth:
-                            prompt = [f"a high-resolution endoscopic photo of {words_to_special_tokens[cls]} {acronyms_to_words[cls][0]} polyp"]
+                            prompt = [f"a high-resolution endoscopic image of {acronyms_to_words[cls][1]} {acronyms_to_words[cls][0]} polyp"]
                             # prompt = [f"an endoscopic image showing a {words_to_special_tokens[cls]} {acronyms_to_words[cls][0]} polyp inside the colon"]
                             # prompt = [f"a realistic high-resolution medical endoscopy image of {acronyms_to_words[cls][1]} {acronyms_to_words[cls][0]} polyp"]
                         else:
-                            prompt = [f"a high-resolution endoscopic photo of {acronyms_to_words[cls][0]} polyp"]
+                            prompt = [f"a high-resolution endoscopic image of {acronyms_to_words[cls][0]} polyp"]
                             # prompt = [f"an endoscopic image showing a {acronyms_to_words[cls][0]} polyp inside the colon"]
                             # prompt = [f"a realistic high-resolution medical endoscopy image of {acronyms_to_words[cls][0]} polyp"]
                     print(f"Prompt: {prompt}")
 
                 mlflow.log_param(f"prompt_{cls}", prompt[0])
                 print(Fore.YELLOW + "\nStarting training...")
-                train_loop(device, config, unet, vae, text_encoder, tokenizer, noise_scheduler, optimizer, dataloader, lr_scheduler, prompt, cls, n_imgs_to_generate, train_text_encoder=args.train_text_encoder)
+                train_loop(device, config, unet, vae, text_encoder, tokenizer, noise_scheduler, 
+                           optimizer, dataloader, lr_scheduler, prompt, cls, 
+                           n_imgs_to_generate, train_text_encoder=args.train_text_encoder,
+                           out_dir=os.path.join(args.folder, "samples", cls))
                 print(Fore.GREEN + f"Training for class {cls} finished and images generated successfully\n" + Style.RESET_ALL)
 
 

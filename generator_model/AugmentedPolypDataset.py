@@ -7,10 +7,6 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
-from config import TrainingConfig
-
-config = TrainingConfig()
-
 class AugmentedPolypClassificationDataset(Dataset):
     def __init__(self, dirs, image_size, transformations=False, ad_vs_rest=False):
         self.image_paths = []
@@ -70,7 +66,7 @@ class AugmentedPolypClassificationDataset(Dataset):
         return image, label
 
     def extract_label_from_dir(self, image_dir):
-        label = os.path.basename(os.path.dirname(image_dir))
+        label = os.path.basename(image_dir)
         if self.dic_label2idx.get("REST") is not None and label != "AD":
             return "REST"
         return label

@@ -5,7 +5,7 @@ import os
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
-from config import TrainingConfig
+from config_diffusion import TrainingConfig
 
 config = TrainingConfig()
 

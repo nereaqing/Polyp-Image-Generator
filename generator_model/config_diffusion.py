@@ -10,21 +10,22 @@ class TrainingConfig:
     num_epochs = 200
     learning_rate = 1e-4
     # save_image_epochs = 10
-    # save_model_epochs = 10
+    # save_model_epochs = 10  
     mixed_precision = "fp16"
     seed = 0
     lora_rank = 8
-    device = "cuda:2"
+    device = "cuda:0"
     num_train_timesteps = 1 # default (computed dynamically)
     lr_warmup_steps = 1 # default
     lora_dropout = 0.3
-    weight_img = 2.0
+    weight_img = 1.0
     weight_text = 0.1
-    weight_token_class = 0.7
-    weight_token_polyp = 0.3
+    weight_token_class = 0.5
+    weight_token_polyp = 0.5
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = f"new_models/conditional_one_vs_rest_{timestamp}" # model_name
+    # output_dir = f"new_models/conditional_dreambooth_weighted_loss_one_vs_rest_{timestamp}" # model_name
+    output_dir = f"new_models/conditional_one_vs_rest_20250620_115016"
     
     # experiment_name = "lora_with_attention"
     experiment_name = "baseline_with_lora"

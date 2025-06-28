@@ -13,7 +13,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from diffusers import DDPMScheduler, DDPMPipeline
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
-from config import TrainingConfig
+from generator_model.config_diffusion import TrainingConfig
 from PolypDiffusionDataset import PolypDiffusionDataset
 from PolypGeneratorModel import PolypGeneratorModel
 

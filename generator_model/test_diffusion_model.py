@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from PolypClassificationModel import PolypClassificationModel
 from AugmentedPolypDataset import AugmentedPolypClassificationDataset
+from config_classification import ConfigClassification
 
 import mlflow
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
@@ -25,38 +26,46 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 
 def preprocess_files(image_size, path_model_to_test, ad_vs_rest=False):
-    train_set = AugmentedPolypClassificationDataset(dirs=[
-                                                        ("./data/m_train2/m_train/images", "./data/m_train2/m_train/train.csv"),
-                                                        (f"./{path_model_to_test}/samples/AD/0199", None),
-                                                        (f"./{path_model_to_test}/samples/REST/0199", None),
-                                                        # (f"./{path_model_to_test}/samples/HP/0199", None)
-                                                    ],
-                                                    image_size=image_size,
-                                                    transformations=True,
-                                                    ad_vs_rest=ad_vs_rest
+    if ad_vs_rest:
+        train_set = AugmentedPolypClassificationDataset(dirs=[
+                                                            ("../data/m_train2/m_train/images", "../data/m_train2/m_train/train.csv"),
+                                                            (f"{path_model_to_test}/samples/AD", None),
+                                                            (f"{path_model_to_test}/samples/REST", None),
+                                                        ],
+                                                        image_size=image_size,
+                                                        transformations=True,
+                                                        ad_vs_rest=ad_vs_rest
         )
-    
-    print("train processed")
+    else:
+        train_set = AugmentedPolypClassificationDataset(dirs=[
+                                                            ("../data/m_train2/m_train/images", "../data/m_train2/m_train/train.csv"),
+                                                            (f"{path_model_to_test}/samples/AD", None),
+                                                            (f"{path_model_to_test}/samples/HP", None),
+                                                            (f"{path_model_to_test}/samples/ASS", None),
+                                                        ],
+                                                        image_size=image_size,
+                                                        transformations=True,
+                                                        ad_vs_rest=ad_vs_rest
+        )
+                                                            
+
 
     val_set = AugmentedPolypClassificationDataset(dirs=[
-                                                        ("./data/m_valid/m_valid/images", "./data/m_valid/m_valid/valid.csv")
+                                                        ("../data/m_valid/m_valid/images", "../data/m_valid/m_valid/valid.csv")
                                                 ],
                                                 image_size=image_size,
                                                 transformations=True,
                                                 ad_vs_rest=ad_vs_rest
         )
-    
-    print("val processed")
         
         
     test_set = AugmentedPolypClassificationDataset(dirs=[
-                                                        ("./data/m_test/m_test/images", "./data/m_test/m_test/gt_test.csv")
+                                                        ("../data/m_test/m_test/images", "../data/m_test/m_test/gt_test.csv")
                                                 ],
                                                 image_size=image_size,
                                                 transformations=True,
                                                 ad_vs_rest=ad_vs_rest
     )
-    print("test processed")
     
     return train_set, val_set, test_set
 
@@ -203,6 +212,8 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
     predicted_labels = [dataset.dic_idx2label[idx] for idx in predicted_labels_idxs]
     true_labels = [dataset.dic_idx2label[idx] for idx in true_labels_idxs]
     
+    output_path = os.path.dirname(path_model)
+    
     
     with mlflow.start_run(run_id=run_id):
         # Calculate metrics
@@ -213,7 +224,7 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
         
         all_metrics = classification_report(true_labels, predicted_labels, labels=sorted(list(set(true_labels))), output_dict=True)
         df_metrics = pd.DataFrame(all_metrics).transpose()
-        path_report = f'./generator_model/results/classifier/metrics_report_{timestamp}.csv'
+        path_report = os.path.join(output_path, f"metrics_report_{timestamp}.csv")
         df_metrics.to_csv(path_report)
         mlflow.log_artifact(path_report, "classifier/results")
         
@@ -225,7 +236,7 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
         plt.xlabel("Predicted Label")
         plt.ylabel("True Label")
         plt.title("Confusion Matrix")
-        path_cm = f'./generator_model/results/classifier/confusion_matrix_{timestamp}.png'
+        path_cm = os.path.join(output_path, f"confusion_matrix_{timestamp}.png")
         plt.savefig(path_cm)
         plt.show()
         mlflow.log_artifact(path_cm, "classifier/results")
@@ -244,48 +255,51 @@ def evaluate_model(model, path_model, test_loader, dataset, run_id, timestamp):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", type=int)
-    parser.add_argument("--learning_rate", type=float)
-    parser.add_argument("--weight_decay", type=float)
-    parser.add_argument("--hidden_features", type=int)
-    parser.add_argument("--image_size", type=int)
-    parser.add_argument("--dropout", type=float)
-    parser.add_argument("--weighted_loss", action="store_true")
-    parser.add_argument("--weighted_sampling", action="store_true")
-    parser.add_argument("--ad_vs_rest", action="store_true")
     parser.add_argument("--experiment_name", type=str, required=True)
     parser.add_argument("--run_id", type=str, required=True)
-    parser.add_argument("--path_model_to_test", type=str, required=True)
+    parser.add_argument("--path_model", type=str, required=True)
+    parser.add_argument("--ad_vs_rest", action='store_true')
     
     args = parser.parse_args()
+    config = ConfigClassification()
+    
     techniques = []
-    path_classifier = f"{args.path_model_to_test}/classifier"
+    path_classifier = f"{args.path_model}/classifier"
     os.makedirs(path_classifier, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_name = f"classifier_{timestamp}.pth"
+    model_path = os.path.join(path_classifier, model_name)
+    if os.path.exists(os.path.dirname(model_path)):
+        print(True)
+        print(model_path)
+    else:
+        print(False)
+    
     
     EXPERIMENT_NAME = args.experiment_name
     mlflow.set_experiment(EXPERIMENT_NAME)
     
     # ================ Construct dataset ==================
     print("Constructing datasets...")
-    augmented_train_set, val_set, test_set = preprocess_files(args.image_size, args.path_model_to_test, args.ad_vs_rest)
+    augmented_train_set, val_set, test_set = preprocess_files(config.image_size, args.path_model, args.ad_vs_rest)
     print("Transformations to apply:", augmented_train_set.transformations_list)
     print("Datasets created")
 
     # ========= Construct dataloader ========================
     print("Constructing dataloaders...")
-    batch_size = args.batch_size
-    augmented_train_loader = DataLoader(augmented_train_set, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=4)
-    test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=4)
+    augmented_train_loader = DataLoader(augmented_train_set, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=4)
+    test_loader = DataLoader(test_set, batch_size=config.batch_size, num_workers=4)
     
-    if args.weighted_sampling:
+    if config.weighted_sampling:
         _, class_weights_dict = get_class_weights(augmented_train_set)
         sample_weights = [class_weights_dict[label] for label in augmented_train_set.labels]
         sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
 
-        augmented_train_loader = DataLoader(augmented_train_set, batch_size=batch_size, sampler=sampler, num_workers=4, drop_last=True)
-        val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=4)
-        test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=4)
+        augmented_train_loader = DataLoader(augmented_train_set, batch_size=config.batch_size, sampler=sampler, num_workers=4, drop_last=True)
+        val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=4)
+        test_loader = DataLoader(test_set, batch_size=config.batch_size, num_workers=4)
         techniques.append("weighted sampling")
         
         
@@ -293,15 +307,15 @@ def main():
      
     # ====================== Set hyperparameters ==========================
     print("Setting hyperparameters...")
-    learning_rate = args.learning_rate
-    num_epochs = 100
-    early_stopping = 10
-    weight_decay = args.weight_decay
-    hidden_features = args.hidden_features
-    dropout = args.dropout
+    learning_rate = config.learning_rate
+    num_epochs = config.num_epochs
+    early_stopping = config.patience
+    weight_decay = config.weight_decay
+    hidden_features = config.hidden_features
+    dropout = config.dropout
 
     polyp_model = PolypClassificationModel(num_classes=len(augmented_train_set.dic_label2idx), dropout=dropout, hidden_features=hidden_features)
-    if args.weighted_loss:
+    if config.weighted_loss:
         class_weights_tensor, _ = get_class_weights(augmented_train_set)
         class_weights_tensor = class_weights_tensor.to(device)
         criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
@@ -313,11 +327,11 @@ def main():
     if len(techniques) == 0:
         params = {
             "transformations": augmented_train_set.transformations_list,
-            "image_size": args.image_size,
+            "image_size": config.image_size,
             "criterion": "CrossEntropy",
             "optimizer": "Adam",
             "hidden_features": hidden_features,
-            "batch_size": batch_size,
+            "batch_size": config.batch_size,
             "dropout": dropout,
             "learning_rate": learning_rate,
             "weight_decay": weight_decay,
@@ -328,11 +342,11 @@ def main():
     else:
         params = {
             "transformations": augmented_train_set.transformations_list,
-            "image_size": args.image_size,
+            "image_size": config.image_size,
             "criterion": "CrossEntropy",
             "optimizer": "Adam",
             "hidden_features": hidden_features,
-            "batch_size": batch_size,
+            "batch_size": config.batch_size,
             "dropout": dropout,
             "learning_rate": learning_rate,
             "weight_decay": weight_decay,
@@ -346,17 +360,6 @@ def main():
         json.dump(params, f, indent=2)
     
     print(params)
-    
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_name = f"classifier_{timestamp}.pth"
-    model_path = f'./{path_classifier}/{model_name}'
-    if os.path.exists(os.path.dirname(model_path)):
-        print(True)
-        print(model_path)
-    else:
-        print(False)
-        
     print("Hyperparameters set")
         
     # =============== TRAINING ===============================
@@ -376,7 +379,7 @@ def main():
         mlflow.pytorch.log_model(polyp_model, "classifier/model")
     
     print("Creating plot loss...")
-    path = f"./generator_model/results/classifier/loss_{timestamp}.png"
+    path = os.path.join(path_classifier, f"loss_{timestamp}.png")
     plot_loss(train_loss_hist, val_loss_hist, path)
 
     with mlflow.start_run(run_id=args.run_id):

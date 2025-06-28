@@ -1,5 +1,5 @@
 from diffusers import UNet2DModel, UNet2DConditionModel
-from config import TrainingConfig
+from generator_model.config_diffusion import TrainingConfig
 from diffusers import (
     AutoencoderKL, UNet2DConditionModel, UniPCMultistepScheduler,
     StableDiffusionPipeline

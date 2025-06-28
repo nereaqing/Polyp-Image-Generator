@@ -10,6 +10,7 @@ import argparse
 from colorama import Fore, Style
 import matplotlib.pyplot as plt
 import math
+import shutil
 
 from transformers import CLIPTokenizer, CLIPTextModel
 from diffusers import (
@@ -19,7 +20,7 @@ from diffusers import (
 from diffusers.optimization import get_cosine_schedule_with_warmup
 from peft import LoraConfig
 
-from config import TrainingConfig
+from generator_model.config_diffusion import TrainingConfig
 from PolypDataset import PolypDataset
 from PolypDiffusionDataset import PolypDiffusionDataset
 
@@ -204,6 +205,12 @@ def train_loop(device, config, unet, vae, text_encoder, tokenizer, noise_schedul
 
             mlflow.log_artifact(os.path.join(config.output_dir, f"model_{cls}"), f"models/{cls}")
             mlflow.log_artifact(save_path, f"models/lora_{cls}")
+            
+            print(Fore.GREEN + "Models sucessfully logged onto MLFlow" + Style.RESET_ALL)
+            
+            shutil.rmtree(save_path) # remove lora weights
+            shutil.rmtree(os.path.join(config.output_dir, f"model_{cls}")) # remove diffusion model pipeline
+            print(Fore.RED + "Models removed from local computer" + Style.RESET_ALL)
 
     plot_path = plot_loss(loss_hist, config.output_dir, cls)
     mlflow.log_artifact(plot_path)
@@ -456,7 +463,7 @@ def main():
                         # prompt = [f"an endoscopic image showing a {words_to_special_tokens[cls]} {acronyms_to_words[cls]} polyp inside the colon"]
                         # prompt = [f"a realistic high-resolution medical endoscopy image of {words_to_special_tokens[cls]} {acronyms_to_words[cls]} polyp"]
                     else:
-                        prompt = [f"a high-resolution endoscopic image of {acronyms_to_words[cls]} polyp"]
+                        prompt = [f"a high-resolution endoscopic photo of {acronyms_to_words[cls]} polyp"]
                         # prompt = [f"an endoscopic image showing a {acronyms_to_words[cls]} polyp inside the colon"]
                         # prompt = [f"a realistic high-resolution medical endoscopy image of {acronyms_to_words[cls]} polyp"]
                 print(f"Prompt: {prompt}")
