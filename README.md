@@ -1,4 +1,4 @@
-# Synthetic Image Generation for Enhancing Polyp Detection
+# Synthetic Image Generation for Enhancing Polyp Classification
 
 This repository contains the implementation for a project focused on improving polyp classification by generating synthetic medical images using diffusion models. The goal is to mitigate data scarcity and class imbalance issues by augmenting existing datasets with realistic synthetic samples.
 
