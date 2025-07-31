@@ -2,6 +2,8 @@
 
 This repository contains the implementation for a project focused on improving polyp classification by generating synthetic medical images using diffusion models. The goal is to mitigate data scarcity and class imbalance issues by augmenting existing datasets with realistic synthetic samples.
 
+A detailed report explaining the full process and results can be found in [`polyp_diffusion_tfg_2025.pdf`](./polyp_diffusion_tfg_2025.pdf).
+
 
 ## Project Overview
 
@@ -10,7 +12,7 @@ This work tackles the challenges of medical image classification by:
 - Training a **diffusion model** (from scratch and via fine-tuning) to generate synthetic polyp images.
 - Evaluating the impact of generated images by integrating them into the classifier's training set.
 
-The synthetic image quality is assessed by the improvement (or degradation) in classifier performance when augmented with generated samples.
+The synthetic image quality is assessed by the improvement (or degradation) in classifier performance when augmented with generated samples. 
 
 ## Classifier Model
 
